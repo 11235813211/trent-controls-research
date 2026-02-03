@@ -24,7 +24,6 @@ def plot_outputs(outputs: List[Tuple[float, np.ndarray]], output_names: List[str
     variables = variables.T[0]
 
     for i, variable in enumerate(variables):
-        print(i, i // nrows, i % nrows)
         if nrows > 1:
             axs[i // nrows, i % nrows].plot(times, variable, 'tab:blue')
             axs[i // nrows, i % nrows].set_title(f'{output_names[i]} vs. Time')
@@ -32,5 +31,4 @@ def plot_outputs(outputs: List[Tuple[float, np.ndarray]], output_names: List[str
             axs[i // nrows].plot(times, variable, 'tab:blue')
             axs[i // nrows].set_title(f'{output_names[i]} vs. Time')
 
-    
     plt.show()
