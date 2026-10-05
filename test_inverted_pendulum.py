@@ -20,7 +20,7 @@ SmallStopScenario = Scenario(
     U_T = np.linspace(0, 0, N_+1).reshape(-1, 1), 
     Q = np.array([
         [10000, 0],
-        [0, 10000]
+        [0, 100]
     ]),
     R = np.array([[0.01]]), 
     X_REF = np.array([0, 0]),

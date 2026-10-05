@@ -1,5 +1,4 @@
 import numpy as np
-from pygame import K_t
 
 # global macros on plant dynamics
 M = 3 # kg
@@ -15,6 +14,21 @@ def nonlinear_plant(x, u, dt):
         x[1] + dt * f
     ])
     return x_next
+
+def linearized_plant_step(x_k, u_k, dt):
+    u_val = u_k[0] if isinstance(u_k, np.ndarray) else u_k
+            
+    A_k = np.array([
+        [1, dt],
+        [M*G*np.cos(x_k[0])*dt, 1],
+    ])
+    
+    B_k = np.array([
+        [0],
+        [dt]
+    ])
+
+    return A_k, B_k
 
 def linearized_plant(x_t_, u_t_, dt):
     N = len(u_t_) - 1
