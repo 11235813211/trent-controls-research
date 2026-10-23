@@ -1,2 +1,24 @@
-.pytest_cache
+# Python environments and generated files
+.venv/
+venv/
 __pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Developer tools
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Local simulation exports and machine-specific files
+outputs/
+.DS_Store
+.idea/
+.vscode/
+.env
+.env.*
+!.env.example
