@@ -1,42 +1,70 @@
+"""Optional Matplotlib figures for recorded optimization trajectories.
+
+Import this module only when plotting is needed; the solver requires NumPy only.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_ilqr(xs, us, dt):
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 9))
 
-    M = xs.shape[0]
-    N = xs.shape[1] - 1
-    t = np.arange(N + 1) * dt
+def plot_ilqr(xs, us, dt, info, save_path=None, show=True):
+    """Plot unconstrained iLQR history using N controls and N + 1 states.
 
-    for i in range(M):
-        # color gradient: black (i=0) -> red (i=M-1)
-        frac = i / (M - 1) if M > 1 else 1.0
-        color = (frac, 0, 0)
+    Returns the Matplotlib figure and 2-by-2 axes array. Set ``show=False``
+    for batch execution. ``info`` must come from the same recorded solve.
+    """
+    xs = np.asarray(xs, dtype=float)
+    us = np.asarray(us, dtype=float)
+    if xs.ndim != 3 or xs.shape[2] != 2 or xs.shape[0] < 1 or xs.shape[1] < 2:
+        raise ValueError("xs must have shape (updates + 1, N + 1, 2), with N >= 1.")
+    if us.shape != (xs.shape[0], xs.shape[1] - 1, 1):
+        raise ValueError("us must have shape (updates + 1, N, 1); no terminal control.")
+    if not np.isfinite(dt) or dt <= 0:
+        raise ValueError("dt must be finite and positive.")
+    if not all(np.all(np.isfinite(a)) for a in (xs, us)):
+        raise ValueError("The trajectory histories must be finite.")
+    costs = np.asarray(info.get("cost_history", []), dtype=float)
+    if costs.shape != (len(xs),) or not np.all(np.isfinite(costs)):
+        raise ValueError("Pass xs, us, and info from the same recorded ilqr solve.")
 
-        ax1.plot(t, xs[i, :, 0], color=color)
-        ax2.plot(t, xs[i, :, 1], color=color)
-        ax3.plot(t, us[i, :, 0], color=color)
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+    (ax_angle, ax_cost), (ax_velocity, ax_control) = axes
+    t = np.arange(xs.shape[1]) * dt
+    for i in range(len(xs)):
+        final = i == len(xs) - 1
+        initial = i == 0 and not final
+        color = "tab:red" if final else "black" if initial else "0.65"
+        alpha = 1.0 if final or initial else 0.3
+        label = "Final" if final else "Initial" if initial else None
+        width = 2.0 if final else 1.0
+        ax_angle.plot(t, xs[i, :, 0], color=color, alpha=alpha, linewidth=width, label=label)
+        ax_velocity.plot(t, xs[i, :, 1], color=color, alpha=alpha, linewidth=width, label=label)
+        ax_control.stairs(us[i, :, 0], t, color=color, alpha=alpha, linewidth=width, label=label)
+    reference = info.get("x_ref", np.zeros(2))
+    for ax, target in ((ax_angle, reference[0]), (ax_velocity, reference[1])):
+        ax.axhline(target, color="tab:blue", linestyle="--", label="Target")
+    ax_angle.set(title="Angle", xlabel="Time (s)", ylabel="Angle (rad)")
+    ax_velocity.set(title="Angular velocity", xlabel="Time (s)", ylabel="Angular velocity (rad/s)")
+    ax_control.set(title="Control", xlabel="Time (s)", ylabel=r"Control (rad/s$^2$)")
+    ax_cost.plot(np.arange(len(costs)), costs, ".-", color="tab:blue")
+    ax_cost.set(title="Cost convergence", xlabel="Accepted iLQR update", ylabel="Cost")
+    if np.all(costs > 0):
+        ax_cost.set_yscale("log")
+    for ax in (ax_angle, ax_velocity, ax_control):
+        ax.set_xlim(t[0], t[-1])
+        ax.legend(fontsize=9)
+    for ax in axes.flat:
+        ax.grid(True, alpha=0.2)
+    fig.suptitle(f"iLQR: inverted pendulum | {info['status']}", fontsize=15)
+    fig.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, dpi=180, bbox_inches="tight")
+    if show:
+        plt.show()
+    return fig, axes
 
-    ax1.set_title(f'Position over iterations (n={M-1})')
-    ax1.set_xlabel('Time (s)')
-    ax1.set_ylabel('Position (rad)')
 
-    ax2.set_title(f'Velocity over iterations (n={M-1})')
-    ax2.set_xlabel('Time (s)')
-    ax2.set_ylabel('Velocity (rad/s)')
-
-    ax3.set_title(f'Control over iterations (n={M-1})')
-    ax3.set_xlabel('Time (s)')
-    ax3.set_ylabel('Control (rad/s^2)')
-
-    ax4.axis('off')  # unused subplot
-
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_alilqr(xs, us, dt, info, x_ref=None, min_position=None,
-                save_path=None, show=True):
+def plot_alilqr(xs, us, dt, info, x_ref=None, min_position=None, save_path=None, show=True):
     """Plot the histories returned by alilqr(..., record_history=True).
 
     xs has shape (updates + 1, N + 1, 2); us has shape (updates + 1, N, 1).
@@ -88,13 +116,10 @@ def plot_alilqr(xs, us, dt, info, x_ref=None, min_position=None,
         label = "Final" if final else "Initial" if initial else None
         alpha = 1.0 if final else 0.8 if initial else 0.35
         width = 2.3 if final else 1.5 if initial else 0.8
-        ax_angle.plot(t, xs[i, :, 0], color=color, alpha=alpha,
-                      linewidth=width, label=label)
-        ax_velocity.plot(t, xs[i, :, 1], color=color, alpha=alpha,
-                         linewidth=width, label=label)
+        ax_angle.plot(t, xs[i, :, 0], color=color, alpha=alpha, linewidth=width, label=label)
+        ax_velocity.plot(t, xs[i, :, 1], color=color, alpha=alpha, linewidth=width, label=label)
         # N controls are held on N intervals, whose edges are the N+1 state times.
-        ax_control.stairs(us[i, :, 0], t, color=color, alpha=alpha,
-                          linewidth=width, label=label)
+        ax_control.stairs(us[i, :, 0], t, color=color, alpha=alpha, linewidth=width, label=label)
 
     bound_label = "Angle lower bound"
     if x_ref is not None:
@@ -109,16 +134,21 @@ def plot_alilqr(xs, us, dt, info, x_ref=None, min_position=None,
         ax_angle.axhspan(lower_limit, min_position, color="tab:blue", alpha=0.06)
 
     ax_angle.set(title="Angle over accepted updates", xlabel="Time (s)", ylabel="Angle (rad)")
-    ax_velocity.set(title="Angular velocity over accepted updates", xlabel="Time (s)",
-                    ylabel="Angular velocity (rad/s)")
-    ax_control.set(title="Control over accepted updates", xlabel="Time (s)",
-                   ylabel=r"Control (rad/s$^2$)")
+    ax_velocity.set(
+        title="Angular velocity over accepted updates",
+        xlabel="Time (s)",
+        ylabel="Angular velocity (rad/s)",
+    )
+    ax_control.set(
+        title="Control over accepted updates", xlabel="Time (s)", ylabel=r"Control (rad/s$^2$)"
+    )
     for ax in (ax_angle, ax_velocity, ax_control):
         ax.set_xlim(t[0], t[-1])
         ax.legend(fontsize=9)
 
-    ax_cost.plot(steps, costs, color="tab:blue", marker=".", linewidth=1.6,
-                 label=r"Original cost $J$")
+    ax_cost.plot(
+        steps, costs, color="tab:blue", marker=".", linewidth=1.6, label=r"Original cost $J$"
+    )
     all_costs = list(costs)
     augmented_label_used = False
     outer_history = info.get("history", [])
@@ -128,9 +158,14 @@ def plot_alilqr(xs, us, dt, info, x_ref=None, min_position=None,
             continue
         segment_cost = [accepted[0]["cost_before"]] + [row["cost_after"] for row in accepted]
         segment_steps = outer["step_start"] + np.arange(len(segment_cost))
-        label = r"Augmented cost $\mathcal{L}_A$ (each inner solve)" if not augmented_label_used else None
-        ax_cost.plot(segment_steps, segment_cost, color="tab:orange", marker=".",
-                     linewidth=1.3, label=label)
+        label = (
+            r"Augmented cost $\mathcal{L}_A$ (each inner solve)"
+            if not augmented_label_used
+            else None
+        )
+        ax_cost.plot(
+            segment_steps, segment_cost, color="tab:orange", marker=".", linewidth=1.3, label=label
+        )
         augmented_label_used = True
         all_costs.extend(segment_cost)
     if np.all(np.asarray(all_costs) > 0.0):
@@ -152,27 +187,49 @@ def plot_alilqr(xs, us, dt, info, x_ref=None, min_position=None,
     # symlog shows exact zeros without replacing them with an artificial floor.
     ax_violation.set_yscale("symlog", linthresh=constraint_tol)
     ax_violation.set_ylim(bottom=0.0)
-    ax_violation.set(title="Maximum angle-constraint violation", xlabel="Accepted iLQR update",
-                      ylabel="Violation (rad)")
+    ax_violation.set(
+        title="Maximum angle-constraint violation",
+        xlabel="Accepted iLQR update",
+        ylabel="Violation (rad)",
+    )
     ax_violation.legend(fontsize=9)
 
     if outer_history:
         outer_steps = [row["outer_iteration"] for row in outer_history]
-        ax_optimality.plot(outer_steps, [row["stationarity"] for row in outer_history],
-                           "o-", color="tab:green", markersize=4, label="Stationarity")
-        ax_optimality.plot(outer_steps, [row["complementarity"] for row in outer_history],
-                           "s-", color="tab:red", markersize=4, label="Complementarity")
+        ax_optimality.plot(
+            outer_steps,
+            [row["stationarity"] for row in outer_history],
+            "o-",
+            color="tab:green",
+            markersize=4,
+            label="Stationarity",
+        )
+        ax_optimality.plot(
+            outer_steps,
+            [row["complementarity"] for row in outer_history],
+            "s-",
+            color="tab:red",
+            markersize=4,
+            label="Complementarity",
+        )
         if gradient_tol == constraint_tol:
             ax_optimality.axhline(gradient_tol, color="0.4", linestyle="--", label="Tolerance")
         else:
-            ax_optimality.axhline(gradient_tol, color="tab:green", linestyle="--", label="Gradient tolerance")
-            ax_optimality.axhline(constraint_tol, color="tab:red", linestyle="--", label="Complementarity tolerance")
+            ax_optimality.axhline(
+                gradient_tol, color="tab:green", linestyle="--", label="Gradient tolerance"
+            )
+            ax_optimality.axhline(
+                constraint_tol, color="tab:red", linestyle="--", label="Complementarity tolerance"
+            )
         ax_optimality.set_yscale("symlog", linthresh=min(gradient_tol, constraint_tol) / 10)
         ax_optimality.set_ylim(bottom=0.0)
         ax_optimality.set_xticks(outer_steps)
         ax_optimality.legend(fontsize=9)
-    ax_optimality.set(title="Optimality after multiplier updates", xlabel="Outer AL iteration",
-                       ylabel="Residual norm")
+    ax_optimality.set(
+        title="Optimality after multiplier updates",
+        xlabel="Outer AL iteration",
+        ylabel="Residual norm",
+    )
 
     # A boundary means lambda/mu changed; augmented costs across it are different objectives.
     boundaries = sorted({row["step_start"] for row in outer_history[1:]})
@@ -185,15 +242,23 @@ def plot_alilqr(xs, us, dt, info, x_ref=None, min_position=None,
         ax.set_xlim(0, max(n_updates, 1))
 
     fig.suptitle("AL-iLQR: inverted pendulum convergence", fontsize=16, y=0.99)
-    fig.text(0.5, 0.948,
-             f"{info['status']}  |  {info['outer_iterations']} outer AL iterations  |  "
-             f"{n_updates} accepted iLQR updates  |  "
-             f"final violation {info['constraint_violation']:.2e} rad",
-             ha="center", fontsize=10)
-    fig.text(0.5, 0.016,
-             "Black to red: initial to final trajectory. Dotted vertical lines: multiplier/penalty updates. "
-             "Augmented-cost segments use fixed multipliers and penalties.",
-             ha="center", fontsize=8)
+    fig.text(
+        0.5,
+        0.948,
+        f"{info['status']}  |  {info['outer_iterations']} outer AL iterations  |  "
+        f"{n_updates} accepted iLQR updates  |  "
+        f"final violation {info['constraint_violation']:.2e} rad",
+        ha="center",
+        fontsize=10,
+    )
+    fig.text(
+        0.5,
+        0.016,
+        "Black to red: initial to final trajectory. Dotted vertical lines: multiplier/penalty updates. "
+        "Augmented-cost segments use fixed multipliers and penalties.",
+        ha="center",
+        fontsize=8,
+    )
     fig.tight_layout(rect=(0, 0.045, 1, 0.935))
     if save_path is not None:
         fig.savefig(save_path, dpi=180, bbox_inches="tight")
