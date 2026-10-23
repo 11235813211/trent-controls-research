@@ -1,0 +1,129 @@
+{
+  "description": "Reference runs for the README example; floating-point residuals may vary by platform.",
+  "environment": {
+    "python": "3.13.2",
+    "numpy": "2.2.4",
+    "matplotlib": "3.10.1"
+  },
+  "commands": [
+    "python -m pendulum_ilqr --output-dir outputs/constrained --plot docs/convergence.png",
+    "python -m pendulum_ilqr --method ilqr --output-dir outputs/unconstrained"
+  ],
+  "runs": {
+    "alilqr": {
+      "method": "alilqr",
+      "problem": {
+        "steps": 30,
+        "dt_s": 0.04,
+        "initial_state": [
+          0.2,
+          -2.0
+        ],
+        "reference_state": [
+          0.0,
+          0.0
+        ],
+        "state_weights": [
+          [
+            20.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ],
+        "control_weights": [
+          [
+            0.02
+          ]
+        ],
+        "terminal_weights": [
+          [
+            100.0,
+            0.0
+          ],
+          [
+            0.0,
+            10.0
+          ]
+        ],
+        "angle_lower_bound_rad": 0.0
+      },
+      "result": {
+        "status": "converged",
+        "converged": true,
+        "initial_cost": 6329.454887001492,
+        "final_cost": 6.772352837867605,
+        "minimum_angle_rad": -1.741234114793072e-11,
+        "violation_of_zero_angle_bound_rad": 1.741234114793072e-11,
+        "stationarity": 1.2321144504667814e-07,
+        "complementarity": 5.856735400936471e-11,
+        "accepted_steps": 24,
+        "peak_control_rad_s2": 12.300544944083487,
+        "terminal_state": [
+          -5.549509401639665e-15,
+          -8.445732674550718e-14
+        ],
+        "outer_iterations": 10
+      }
+    },
+    "ilqr": {
+      "method": "ilqr",
+      "problem": {
+        "steps": 30,
+        "dt_s": 0.04,
+        "initial_state": [
+          0.2,
+          -2.0
+        ],
+        "reference_state": [
+          0.0,
+          0.0
+        ],
+        "state_weights": [
+          [
+            20.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0
+          ]
+        ],
+        "control_weights": [
+          [
+            0.02
+          ]
+        ],
+        "terminal_weights": [
+          [
+            100.0,
+            0.0
+          ],
+          [
+            0.0,
+            10.0
+          ]
+        ],
+        "angle_lower_bound_rad": null
+      },
+      "result": {
+        "status": "converged",
+        "converged": true,
+        "initial_cost": 6329.454887001492,
+        "final_cost": 6.726857800004673,
+        "minimum_angle_rad": -0.010992342709074654,
+        "violation_of_zero_angle_bound_rad": 0.010992342709074654,
+        "stationarity": 1.484701667164856e-09,
+        "complementarity": 0.0,
+        "accepted_steps": 5,
+        "peak_control_rad_s2": 11.769506874923442,
+        "terminal_state": [
+          -0.0006670619324450877,
+          1.952079386260085e-05
+        ]
+      }
+    }
+  }
+}
