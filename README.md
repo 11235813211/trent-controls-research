@@ -1,190 +1,175 @@
-# Constrained Pendulum Trajectory Optimization
+# Rocket Recovery Dynamics
 
-Nonlinear trajectory optimization in Python using iterative linear quadratic
-regulation (iLQR) and an augmented Lagrangian extension (AL-iLQR). The example
-brakes an inverted pendulum toward its upright equilibrium while enforcing an
-angle lower bound.
+A six-degree-of-freedom rocket plant for studying terminal descent and recovery
+landing. The model combines gravity, aerodynamics, and abstract thrust, with
+quaternion attitude and a three-component angular velocity. It provides
+nonlinear simulation and local linearizations for future trajectory optimization.
 
-The implementation exposes the numerical work: analytic dynamics Jacobians,
-Riccati backward passes, nonlinear forward rollouts, line search, multiplier
-updates, and feasibility and optimality diagnostics. NumPy is the only solver
-dependency; Matplotlib is optional.
+The rocket implementation is the plant and simulation layer. It has no rocket
+controller or iLQR/AL-iLQR solver. The original pendulum optimization example is
+preserved separately in [the pendulum documentation](docs/pendulum/README.md).
 
-![AL-iLQR trajectories and convergence diagnostics](docs/convergence.png)
-
-## Run the example
+## Run a descent segment
 
 Use Python 3.10 or newer. From the repository root:
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install ".[plot,dev]"
-python -m pendulum_ilqr
+.venv/bin/python -m pip install ".[plot,dev]"
+.venv/bin/python -m rocket_landing
 ```
 
-On Windows, activate with `.venv\Scripts\activate` instead. The default command
-prints convergence diagnostics without opening a window or writing files.
+These commands install the local package and use the same Python interpreter to
+run it. The distribution is named `rocket-recovery-dynamics`; its Python import
+is `rocket_landing`. NumPy is the only required runtime dependency. Matplotlib
+and the development tools are optional extras.
 
-Export the trajectory, iteration diagnostics, and convergence figure:
+The default `maneuver` example propagates six seconds at a 0.02 s time step.
+It starts upright at 50 m altitude, descending at 10 m/s, with a mass of 1000 kg.
+Five preset thrust phases tip the vehicle in two axes, counter the rotation,
+and brake its descent. Thrust at the tail produces both force and torque;
+the changing attitude redirects axial thrust into lateral motion.
+
+The rocket moves about 10.6 m west and 6.1 m south while descending to 12.5 m.
+Descent speed falls to about 0.66 m/s; tilt peaks at 6.3° and ends at 2.0°,
+with a final angular speed of 0.16°/s. All commands are fixed before simulation,
+with no feedback or optimizer. The segment ends above ground with lateral
+velocity remaining. The [model notes](docs/rocket-model.md#simulation-example)
+give the exact thrust schedule.
+
+The default command prints a summary and writes no files. To export a trajectory,
+figure, and local state/control matrices:
 
 ```bash
-python -m pendulum_ilqr --output-dir outputs/constrained --plot outputs/constrained/convergence.png
-python -m pendulum_ilqr --method ilqr --output-dir outputs/unconstrained --plot outputs/unconstrained/convergence.png
+.venv/bin/python -m rocket_landing \
+  --output-dir outputs/rocket \
+  --plot outputs/rocket/maneuver.png \
+  --linearize
 ```
 
-Add `--show` for an interactive figure. `pendulum-ilqr` is an equivalent installed
-command. Install with `python -m pip install .` for the NumPy-only solver.
+The output directory contains `trajectory.csv`, `summary.json`, and, when
+`--linearize` is supplied, `linearizations.npz`. The summary records the complete
+thrust schedule and the peak/final tilt and angular speed. The figure includes
+a 3D trajectory with nose-direction arrows, thrust, altitude, velocity, tilt,
+angular rates, and all four scalar-first attitude quaternion components
+`[qw, qx, qy, qz]`. Separate scalar/vector quaternion panels make small attitude
+changes readable. Add `--show` to display the figure interactively.
 
-## Example and results
+![Open-loop rocket maneuver with quaternion attitude plots](docs/rocket-maneuver.png)
 
-Both solvers start with the same zero-control guess, initial state
-`[0.2 rad, -2 rad/s]`, and upright target `[0, 0]`. The horizon is 30 controls at
-0.04 s per step (1.2 s). Running weights are `W = diag(20, 1)` and `R = 0.02`;
-terminal weights are `W_f = diag(100, 10)`. AL-iLQR adds `angle >= 0` at every
-state, including the terminal state.
+Use `--scenario braking` for the original four-second vertical braking case,
+`--scenario hover` for stationary thrust balance, or `--scenario coast` for
+unpowered descent. All scenarios use the free-flight plant; they do not
+simulate ground contact.
 
-The initial velocity carries the pendulum toward the bound. Unconstrained iLQR
-can cross it to reduce tracking and control cost; AL-iLQR trades additional
-control effort for constraint satisfaction. The reference results and exact
-residuals are recorded in [docs/reference-results.json](docs/reference-results.json).
+## Plant interface
 
-| Metric | iLQR | AL-iLQR |
-| --- | ---: | ---: |
-| Final cost | 6.726858 | 6.772353 |
-| Maximum violation of `angle >= 0` (rad) | 1.099e-2 | 1.741e-11 |
-| Stationarity residual | 1.485e-9 | 1.232e-7 |
-| Accepted iLQR updates | 5 | 24 |
+World coordinates are local East-North-Up, with world +Z upward. Body +Z points
+toward the nose. Position and velocity are expressed in the world frame;
+angular velocity and thrust are expressed in the body frame.
 
-Both runs converge at the default `1e-6` gradient tolerance; AL-iLQR also meets
-the `1e-6` feasibility and complementarity tolerances. These are example results,
-not performance benchmarks; residuals and iteration counts can vary with
-floating-point arithmetic.
+| Quantity | Layout | Units |
+| --- | --- | --- |
+| Stored state, 14 entries | `[r_W(3), v_W(3), q_BW(4), omega_B(3), m]` | m, m/s, unit quaternion, rad/s, kg |
+| Control, 3 entries | `[T_Bx, T_By, T_Bz]` | N |
+| Local perturbation, 13 entries | `[dr_W(3), dv_W(3), dphi_B(3), domega_B(3), dm]` | m, m/s, rad, rad/s, kg |
 
-The figure shows the initial, intermediate, and final trajectories alongside
-cost, maximum constraint violation, stationarity, and complementarity. Original
-cost can increase as the constraint is enforced. Each augmented-cost segment
-uses fixed multipliers and penalties, so comparisons across outer iterations
-refer to different objectives.
-
-## Model and optimization problem
-
-The state is `x = [theta, omega]`: unwrapped angle in radians and angular velocity
-in rad/s. The input `u` is normalized angular acceleration in rad/s². Zero angle
-is the unstable upright equilibrium. Forward Euler discretizes
-
-```text
-theta_dot = omega
-omega_dot = 29.43 * sin(theta) + u
-```
-
-The effective gravity coefficient is `29.43 s^-2`. It preserves the original
-research model's numerical behavior; interpreting it as a mass would be
-dimensionally incorrect. This is a simplified two-state pendulum with no
-damping or actuator dynamics.
-
-For `N` controls and `N + 1` states, the objective is
-
-```text
-J = 1/2 sum(k=0..N-1) [(x_k - x_ref)' W (x_k - x_ref) + u_k' R u_k]
-    + 1/2 (x_N - x_ref)' W_f (x_N - x_ref)
-```
-
-Weights apply per discrete step; running costs are not multiplied by `dt`.
-The constrained variant adds `min_position - theta_k <= 0` for `k = 0..N`.
-`min_position` is an angle bound despite its historical parameter name.
-
-See [the numerical method](docs/numerics.md) for the backward pass, penalty
-activation, line search, convergence criteria, and implementation tradeoffs.
-
-## Python API
+Attitude uses the **left, passive, scalar-first** convention: `q = [s, v]`,
+`C_BW(q)` maps world vectors into body coordinates, and
+`q_dot = 0.5 * [0, omega_B] ⊗L q`. The left product has a negative cross term.
+The [model notes](docs/rocket-model.md) define the multiplication, rotation
+matrix, load equations, and local attitude coordinates explicitly.
 
 ```python
 import numpy as np
 
-from pendulum_ilqr import alilqr
-
-states, controls, info = alilqr(
-    x_0=np.array([0.2, -2.0]),
-    u_t=np.zeros((30, 1)),
-    W=np.diag([20.0, 1.0]),
-    R=np.array([[0.02]]),
-    x_ref=np.zeros(2),
-    dt=0.04,
-    W_f=np.diag([100.0, 10.0]),
-    min_position=0.0,
+from rocket_landing import (
+    RocketLandingPlant,
+    linearize_trajectory,
+    make_state,
+    rollout,
 )
 
-print(info["status"], info["constraint_violation"], info["stationarity"])
+plant = RocketLandingPlant()
+x0 = make_state()  # 30 m altitude, -10 m/s vertical velocity, 1000 kg
+thrust = np.array([0.0, 0.0, x0[13] * (plant.parameters.gravity + 2.0)])
+controls = np.tile(thrust, (200, 1))
+states = rollout(plant, x0, controls, dt=0.02)
+A, B = linearize_trajectory(plant, states, controls, dt=0.02)
+
+assert states.shape == (201, 14)
+assert A.shape == (200, 13, 13)
+assert B.shape == (200, 13, 3)
 ```
 
-`states.shape == (31, 2)` and `controls.shape == (30, 1)`. There is no terminal
-control. Each returned state is generated by the nonlinear discrete dynamics.
-Use `ilqr` with the same problem arguments for unconstrained optimization.
-Check `info["converged"]` before treating either result as a converged solution.
+`plant.loads(x, u)` exposes each force and moment, `plant.derivative(x, u)`
+returns continuous dynamics, and `plant.step(x, u, dt)` advances held thrust
+using RK4 with quaternion normalization. Mass is fixed by default. Setting
+`RocketParameters(specific_impulse=...)` enables algebraic mass depletion
+without adding an engine state.
 
-By default, `info["xs"]`, `info["us"]`, and `info["cost_history"]` store the
-initial trajectory followed by accepted updates. Pass `record_history=False`
-to avoid storing these trajectory arrays. Scalar iteration diagnostics remain
-available in `info["history"]`.
+Continuous Jacobians use the 14 stored coordinates. Discrete Jacobians use
+13 local coordinates, including a three-component attitude error. Both are
+computed numerically with central differences. `linearize_trajectory` requires
+a dynamically consistent rollout and returns matrices ready for a future
+solver's local trajectory model. At zero thrust, optional mass depletion is
+nondifferentiable and the Jacobian methods reject that operating point.
 
-The demo's CSV has one row per state time. Its final control field is blank
-because controls act on the preceding `N` intervals. JSON exports contain the
-problem, result metrics, and per-iteration diagnostics.
-
-## Validation and development
-
-The tests exercise the installed package. After changing source files, reinstall
-with `python -m pip install --no-deps .` before running the checks below.
-An editable install (`python -m pip install -e ".[plot,dev]"`) can be used in a
-local development clone to make source changes available immediately.
-
-```bash
-python -m pytest
-ruff check .
-ruff format --check .
-python -m build
-```
-
-Tests use small deterministic problems and check:
-
-- Analytic dynamics Jacobians and adjoint gradients against central differences.
-- Returned trajectories against an independent nonlinear rollout.
-- Cost reduction and stationarity for unconstrained tracking.
-- An active terminal angle bound, nonnegative multipliers, and independently
-  evaluated KKT residuals.
-- Equilibrium, invalid inputs, input ownership, and disabled trajectory history.
-- Headless figure generation and CSV/JSON export behavior.
-
-Plotting tests use Matplotlib's noninteractive backend and are skipped if the
-optional dependency is absent. The solver can be imported without Matplotlib.
+## Repository layout
 
 ```text
-src/pendulum_ilqr/
-    dynamics.py     Discrete model and analytic Jacobians
-    solver.py       Shared iLQR machinery and augmented Lagrangian outer loop
-    demo.py         Reproducible example, CLI, CSV/JSON export
-    plotting.py     Optional trajectory and convergence figures
-tests/             Numerical, API, plotting, and CLI tests
-docs/              Method notes and reproducible reference results
+src/
+    rocket_landing/
+        attitude.py          Quaternion algebra and local state coordinates
+        dynamics.py          Loads, rigid-body plant, RK4, Jacobians
+        simulation.py        Open-loop rollout and trajectory linearizations
+        demo.py              Command-line scenarios and result exports
+        plotting.py          Optional simulation figures
+    pendulum_ilqr/
+        plants/pendulum.py   Existing pendulum model
+        controls/ilqr.py     Existing pendulum iLQR and AL-iLQR
+        simulation/          Pendulum demo, exports, and plotting
+tests/                       Plant, quaternion, simulation, and pendulum tests
+docs/
+    rocket-model.md          Rocket conventions, equations, and assumptions
+    pendulum/                Original optimization notes and reference results
 ```
 
-## Scope
+The rocket plant does not import the pendulum solvers. This separation lets a
+future controls layer consume the rocket's dynamics and linearizations without
+moving propagation or load calculations into the optimizer.
 
-This project studies finite-horizon trajectory optimization on a simplified
-nonlinear plant. It does not model a launch vehicle or implement a state
-estimator, receding-horizon controller, actuator limits, or a hardware interface.
-The solvers find local solutions. Bounds are checked at discrete nodes; the
-integration scheme and tolerances do not establish continuous-time feasibility.
-Infeasible problems or an insufficient iteration budget can return
-`converged=False`.
+## Validation
 
-## Reference
+These checks exercise the installed package. Reinstall after changing source
+files so the test run uses the updated code:
 
-Taylor A. Howell, Brian E. Jackson, and Zachary Manchester,
-*ALTRO: A Fast Solver for Constrained Trajectory Optimization*, IROS 2019,
-pp. 7674–7679. [Paper](https://thowell.github.io/documents/altro_iros.pdf) ·
-[Publication record](https://publications.ri.cmu.edu/altro-a-fast-solver-for-constrained-trajectory-optimization).
+```bash
+.venv/bin/python -m pip install ".[plot,dev]"
+.venv/bin/python -m pytest
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+.venv/bin/python -m build
+```
 
-The constrained solver follows the AL-iLQR approach in Section II.A. It does not
-implement ALTRO's projected Newton refinement or the complete ALTRO algorithm.
+Tests cover quaternion algebra and rate signs, force and moment accounting,
+known free-flight cases, mass depletion, integration, and the local
+linearization interface. Maneuver checks bound tilt and angular rates, verify
+continued descent above ground, and remove steering/thrust to confirm their
+effects on rotation, translation, and braking. The retained pendulum tests
+exercise its existing optimization and export behavior.
+
+## Modeling scope
+
+Vehicle dimensions, inertia, drag-area products, and atmospheric defaults are
+illustrative values. They are not identified from or validated against a
+particular rocket. The aerodynamic model is a lumped anisotropic drag force at
+a fixed pressure center, including the local velocity caused by body rotation.
+Gravity is constant in a local world frame; wind is uniform and density follows
+an exponential profile.
+
+Thrust is a directly commanded body force at a fixed application point. The
+plant has no throttle or gimbal dynamics, thrust limits, ground contact,
+clipping, state estimator, or controller. Inertia and load offsets remain fixed
+even when mass depletion is enabled. These assumptions and the finite-difference
+linearization limits are detailed in [the model notes](docs/rocket-model.md).

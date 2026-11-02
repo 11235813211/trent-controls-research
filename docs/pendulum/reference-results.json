@@ -6,7 +6,7 @@
     "matplotlib": "3.10.1"
   },
   "commands": [
-    "python -m pendulum_ilqr --output-dir outputs/constrained --plot docs/convergence.png",
+    "python -m pendulum_ilqr --output-dir outputs/constrained --plot docs/pendulum/convergence.png",
     "python -m pendulum_ilqr --method ilqr --output-dir outputs/unconstrained"
   ],
   "runs": {

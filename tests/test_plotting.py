@@ -5,7 +5,7 @@ import importlib
 import numpy as np
 import pytest
 
-from pendulum_ilqr.solver import alilqr, ilqr
+from pendulum_ilqr.controls.ilqr import alilqr, ilqr
 
 
 @pytest.fixture
@@ -13,7 +13,7 @@ def plotting(monkeypatch, tmp_path):
     monkeypatch.setenv("MPLBACKEND", "Agg")
     monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "matplotlib"))
     pytest.importorskip("matplotlib")
-    module = importlib.import_module("pendulum_ilqr.plotting")
+    module = importlib.import_module("pendulum_ilqr.simulation.plotting")
     yield module
     module.plt.close("all")
 

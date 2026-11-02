@@ -4,8 +4,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from pendulum_ilqr.dynamics import GRAVITY_COEFFICIENT
-from pendulum_ilqr.solver import (
+from pendulum_ilqr.controls.ilqr import (
     _control_gradient,
     alilqr,
     augmented_cost,
@@ -14,6 +13,7 @@ from pendulum_ilqr.solver import (
     rollout,
     total_cost,
 )
+from pendulum_ilqr.plants.pendulum import GRAVITY_COEFFICIENT
 
 
 def _independent_rollout(x_0, controls, dt):

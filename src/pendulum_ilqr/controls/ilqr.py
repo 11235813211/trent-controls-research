@@ -19,7 +19,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .dynamics import linearized_plant_step, nonlinear_plant
+from pendulum_ilqr.plants.pendulum import linearized_plant_step, nonlinear_plant
 
 FloatArray = NDArray[np.float64]
 SolverInfo = dict[str, Any]

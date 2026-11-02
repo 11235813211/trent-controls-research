@@ -106,7 +106,7 @@ and residuals should be inspected together; feasibility alone is insufficient.
 
 ## Reproducing and interpreting results
 
-Run the commands in the [README](../README.md) to regenerate both examples.
+Run the commands in the [README](README.md) to regenerate both examples.
 The same zero-control initial guess, model, horizon, and weights are used in
 both methods. Minor floating-point differences across NumPy and BLAS versions
 can affect the final residuals and accepted-step counts.

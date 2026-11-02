@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from pendulum_ilqr.dynamics import (
+from pendulum_ilqr.plants.pendulum import (
     GRAVITY_COEFFICIENT,
     linearized_plant_step,
     nonlinear_plant,

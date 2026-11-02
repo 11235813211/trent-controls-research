@@ -7,8 +7,8 @@ import json
 import numpy as np
 import pytest
 
-from pendulum_ilqr import demo
-from pendulum_ilqr.solver import alilqr
+from pendulum_ilqr.controls.ilqr import alilqr
+from pendulum_ilqr.simulation import demo
 
 
 def _reject_nonfinite_constant(value):
@@ -21,7 +21,7 @@ def test_cli_exports_finite_results_without_loading_plotting(method, tmp_path, m
     original_import = builtins.__import__
 
     def import_without_plotting(name, *args, **kwargs):
-        if name.startswith("matplotlib") or name == "pendulum_ilqr.plotting":
+        if name.startswith("matplotlib") or name == "pendulum_ilqr.simulation.plotting":
             pytest.fail("A default CLI run must not import plotting or require a display.")
         return original_import(name, *args, **kwargs)
 

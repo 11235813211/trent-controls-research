@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from pendulum_ilqr.solver import alilqr, ilqr, total_cost
+from pendulum_ilqr.controls.ilqr import alilqr, ilqr, total_cost
 
 
 def demo_problem() -> dict:
@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
 
             if not args.show:
                 matplotlib.use("Agg")
-            from pendulum_ilqr.plotting import plot_alilqr, plot_ilqr
+            from pendulum_ilqr.simulation.plotting import plot_alilqr, plot_ilqr
         except ModuleNotFoundError as exc:
             if exc.name != "matplotlib":
                 raise

@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pendulum-ilqr"
-version = "0.1.0"
-description = "Constrained nonlinear trajectory optimization with augmented Lagrangian iLQR"
+name = "rocket-recovery-dynamics"
+version = "0.2.0"
+description = "Quaternion rocket recovery dynamics and isolated pendulum control examples"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24,<3"]
@@ -15,7 +15,8 @@ plot = ["matplotlib>=3.7,<4"]
 dev = ["pytest>=8,<10", "ruff>=0.11,<1", "build>=1.2,<2"]
 
 [project.scripts]
-pendulum-ilqr = "pendulum_ilqr.demo:main"
+rocket-landing = "rocket_landing.demo:main"
+pendulum-ilqr = "pendulum_ilqr.simulation.demo:main"
 
 [project.urls]
 Repository = "https://github.com/11235813211/trent-controls-research"
